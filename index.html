@@ -3,67 +3,71 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>OneTickets – Skaner biletów</title>
+    <title>OneTickets – Skaner</title>
     <script src="https://unpkg.com/html5-qrcode" defer></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
         #reader { width: 300px; margin: 20px auto; }
-        .result { font-size: 22px; font-weight: bold; margin-top: 20px; }
+        #popup {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #4caf50;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 10px;
+            font-size: 22px;
+            font-weight: bold;
+            display: none;
+        }
     </style>
 </head>
 <body>
-    <h1>OneTickets – Skaner</h1>
-    <p>Zeskanuj ten kod, aby potwierdzić dane użytkownika.</p>
-
-    <!-- Wbudowany kod QR biletu -->
-    <div id="ticketQR" style="margin:20px;"></div>
+    <h1>OneTickets – Skaner biletów</h1>
+    <p>Skanuj bilety, aby potwierdzić użytkownika.</p>
 
     <div id="reader"></div>
-    <div class="result" id="result">Oczekiwanie na skan...</div>
+    <div id="popup"></div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
     <script>
-        // Funkcja pobiera imię i nazwisko z URL
-        function getUserFromURL() {
-            const path = window.location.pathname;
-            const parts = path.split("/");
-            const last = parts[parts.length - 1];
-            if (!last) return null;
-            const decoded = decodeURIComponent(last);
-            if (!decoded.includes(",")) return null;
-            const [imie, nazwisko] = decoded.split(",");
-            return { imie, nazwisko };
-        }
+        // Ten skaner działa TYLKO pod adresem:
+        // https://onedevelopmentpl.github.io/onetickets
 
-        const user = getUserFromURL();
-
-        // GENERATOR QR — skaner jest wbudowany i generuje własny kod QR biletu
-        if (user) {
-            const qr = new QRious({
-                element: document.getElementById('ticketQR'),
-                size: 220,
-                value: `https://onedevelopmentpl.github.io/onetickets/${user.imie},${user.nazwisko}`
-            });
-        }
-        const resultBox = document.getElementById("result");
-
-        if (!user) {
-            resultBox.textContent = "Błąd: niepoprawny format URL (brak imienia i nazwiska)";
+        function showPopup(text) {
+            const popup = document.getElementById("popup");
+            popup.textContent = text;
+            popup.style.display = "block";
+            setTimeout(() => {
+                popup.style.display = "none";
+            }, 3000);
         }
 
         function onScanSuccess(qrMessage) {
-            // Oczekiwany QR powinien zawierać ten sam link co w URL
-            const expected = `https://onedevelopmentpl.github.io/onetickets/${user.imie},${user.nazwisko}`;
-            if (qrMessage === expected) {
-                resultBox.textContent = `Bilet poprawny! ✔\n${user.imie} ${user.nazwisko}`;
-                html5QrCode.stop();
-            } else {
-                resultBox.textContent = "❌ Błędny bilet!";
+            // Oczekiwany format:  https://onedevelopmentpl.github.io/tickets/t?=Imie,Nazwisko
+            if (!qrMessage.startsWith("https://onedevelopmentpl.github.io/tickets/t?=")) {
+                showPopup("Błędny format QR!");
+                return;
             }
+
+            const data = qrMessage.split("?=");
+            if (data.length !== 2) {
+                showPopup("Niepoprawne dane QR!");
+                return;
+            }
+
+            const osoba = decodeURIComponent(data[1]);
+            if (!osoba.includes(",")) {
+                showPopup("Brak imienia i nazwiska!");
+                return;
+            }
+
+            const [imie, nazwisko] = osoba.split(",");
+            showPopup(`${imie} ${nazwisko}`);
         }
 
         function onScanError(err) {
-            // ignorujemy błędy, skaner działa dalej
+            // ignorujemy błędy
         }
 
         const html5QrCode = new Html5Qrcode("reader");
