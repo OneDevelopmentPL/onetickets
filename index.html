@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OneTickets – Skaner biletów</title>
+    <script src="https://unpkg.com/html5-qrcode" defer></script>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
+        #reader { width: 300px; margin: 20px auto; }
+        .result { font-size: 22px; font-weight: bold; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>OneTickets – Skaner</h1>
+    <p>Zeskanuj bilet, aby potwierdzić dane użytkownika.</p>
+
+    <div id="reader"></div>
+    <div class="result" id="result">Oczekiwanie na skan...</div>
+
+    <script>
+        // Funkcja pobiera imię i nazwisko z URL
+        function getUserFromURL() {
+            const path = window.location.pathname;
+            const parts = path.split("/");
+            const last = parts[parts.length - 1];
+            if (!last) return null;
+            const decoded = decodeURIComponent(last);
+            if (!decoded.includes(",")) return null;
+            const [imie, nazwisko] = decoded.split(",");
+            return { imie, nazwisko };
+        }
+
+        const user = getUserFromURL();
+        const resultBox = document.getElementById("result");
+
+        if (!user) {
+            resultBox.textContent = "Błąd: niepoprawny format URL (brak imienia i nazwiska)";
+        }
+
+        function onScanSuccess(qrMessage) {
+            // Oczekiwany QR powinien zawierać ten sam link co w URL
+            const expected = `https://onedevelopmentpl.github.io/onetickets/${user.imie},${user.nazwisko}`;
+            if (qrMessage === expected) {
+                resultBox.textContent = `Bilet poprawny! ✔\n${user.imie} ${user.nazwisko}`;
+                html5QrCode.stop();
+            } else {
+                resultBox.textContent = "❌ Błędny bilet!";
+            }
+        }
+
+        function onScanError(err) {
+            // ignorujemy błędy, skaner działa dalej
+        }
+
+        const html5QrCode = new Html5Qrcode("reader");
+        Html5Qrcode.getCameras().then(cameras => {
+            if (cameras && cameras.length) {
+                html5QrCode.start(
+                    cameras[0].id,
+                    { fps: 10, qrbox: 250 },
+                    onScanSuccess,
+                    onScanError
+                );
+            }
+        });
+    </script>
+</body>
+</html>
