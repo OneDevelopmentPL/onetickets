@@ -13,11 +13,15 @@
 </head>
 <body>
     <h1>OneTickets – Skaner</h1>
-    <p>Zeskanuj bilet, aby potwierdzić dane użytkownika.</p>
+    <p>Zeskanuj ten kod, aby potwierdzić dane użytkownika.</p>
+
+    <!-- Wbudowany kod QR biletu -->
+    <div id="ticketQR" style="margin:20px;"></div>
 
     <div id="reader"></div>
     <div class="result" id="result">Oczekiwanie na skan...</div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
     <script>
         // Funkcja pobiera imię i nazwisko z URL
         function getUserFromURL() {
@@ -32,6 +36,15 @@
         }
 
         const user = getUserFromURL();
+
+        // GENERATOR QR — skaner jest wbudowany i generuje własny kod QR biletu
+        if (user) {
+            const qr = new QRious({
+                element: document.getElementById('ticketQR'),
+                size: 220,
+                value: `https://onedevelopmentpl.github.io/onetickets/${user.imie},${user.nazwisko}`
+            });
+        }
         const resultBox = document.getElementById("result");
 
         if (!user) {
