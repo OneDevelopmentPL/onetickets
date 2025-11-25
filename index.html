@@ -27,7 +27,7 @@
     <h1>OneTickets – Skaner biletów</h1>
     <p>Skanuj bilety, aby potwierdzić użytkownika.</p>
 
-    <div id="reader"></div>
+    <div id="reader" style="width:350px; height:350px; border:2px solid #000; border-radius:12px;"></div>
     <div id="popup"></div>
 
     <script>
@@ -67,11 +67,13 @@
         }
 
         function onScanError(err) {
-            // ignorujemy błędy
+            alert("Wystąpił nieoczekiwany błąd!");
         }
 
         const html5QrCode = new Html5Qrcode("reader");
-        Html5Qrcode.getCameras().then(cameras => {
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(() => {
+                Html5Qrcode.getCameras().then(cameras => {
             if (cameras && cameras.length) {
                 html5QrCode.start(
                     cameras[0].id,
