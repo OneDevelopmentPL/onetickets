@@ -6,8 +6,74 @@
     <title>OneTickets – Skaner</title>
     <script src="https://unpkg.com/html5-qrcode" defer></script>
     <style>
-        body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
-        #reader { width: 300px; margin: 20px auto; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            color: white;
+        }
+        
+        .container {
+            max-width: 500px;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            color: #333;
+        }
+        
+        h1 { 
+            font-size: 28px;
+            margin-bottom: 10px;
+            color: #667eea;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 25px;
+            font-size: 14px;
+        }
+        
+        #reader { 
+            width: 100%;
+            max-width: 350px;
+            height: 350px;
+            margin: 20px auto;
+            border: 3px solid #667eea;
+            border-radius: 15px;
+            overflow: hidden;
+        }
+        
+        #status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            background: #f0f0f0;
+            font-size: 14px;
+            color: #666;
+        }
+        
+        #status.error {
+            background: #ffebee;
+            color: #c62828;
+        }
+        
+        #status.success {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+        
         #popup {
             position: fixed;
             top: 20px;
@@ -15,72 +81,248 @@
             transform: translateX(-50%);
             background: #4caf50;
             color: white;
-            padding: 15px 25px;
-            border-radius: 10px;
-            font-size: 22px;
+            padding: 20px 30px;
+            border-radius: 15px;
+            font-size: 24px;
             font-weight: bold;
             display: none;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+            animation: slideDown 0.3s ease;
+        }
+        
+        #popup.error {
+            background: #f44336;
+        }
+        
+        @keyframes slideDown {
+            from {
+                transform: translateX(-50%) translateY(-100px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(-50%) translateY(0);
+                opacity: 1;
+            }
+        }
+        
+        .btn {
+            margin-top: 15px;
+            padding: 12px 25px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        .btn:hover {
+            background: #5568d3;
+        }
+        
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .scan-count {
+            margin-top: 20px;
+            font-size: 18px;
+            font-weight: bold;
+            color: #667eea;
         }
     </style>
 </head>
 <body>
-    <h1>OneTickets – Skaner biletów</h1>
-    <p>Skanuj bilety, aby potwierdzić użytkownika.</p>
-
-    <div id="reader" style="width:350px; height:350px; border:2px solid #000; border-radius:12px;"></div>
+    <div class="container">
+        <h1>🎫 OneTickets – Skaner</h1>
+        <p class="subtitle">Skanuj bilety, aby potwierdzić użytkownika</p>
+        
+        <div id="reader"></div>
+        
+        <div id="status">Kliknij "Uruchom skaner" aby rozpocząć</div>
+        
+        <button id="startBtn" class="btn">📷 Uruchom skaner</button>
+        
+        <div class="scan-count">
+            Zeskanowane bilety: <span id="count">0</span>
+        </div>
+    </div>
+    
     <div id="popup"></div>
-
+    
     <script>
-        // Ten skaner działa TYLKO pod adresem:
-        // https://onedevelopmentpl.github.io/onetickets
-
-        function showPopup(text) {
+        let html5QrCode = null;
+        let isScanning = false;
+        let scanCount = 0;
+        let lastScannedCode = "";
+        let lastScanTime = 0;
+        
+        const statusDiv = document.getElementById("status");
+        const startBtn = document.getElementById("startBtn");
+        const countSpan = document.getElementById("count");
+        
+        function updateStatus(message, type = 'info') {
+            statusDiv.textContent = message;
+            statusDiv.className = type;
+        }
+        
+        function showPopup(text, isError = false) {
             const popup = document.getElementById("popup");
             popup.textContent = text;
+            popup.className = isError ? 'error' : '';
             popup.style.display = "block";
+            
             setTimeout(() => {
                 popup.style.display = "none";
             }, 3000);
         }
-
+        
         function onScanSuccess(qrMessage) {
-            // Oczekiwany format:  https://onedevelopmentpl.github.io/tickets/t?=Imie,Nazwisko
-            if (!qrMessage.startsWith("https://onedevelopmentpl.github.io/tickets/t?=")) {
-                showPopup("Błędny format QR!");
+            const now = Date.now();
+            
+            // Zapobiegaj wielokrotnemu skanowaniu tego samego kodu w krótkim czasie
+            if (qrMessage === lastScannedCode && now - lastScanTime < 3000) {
                 return;
             }
-
+            
+            lastScannedCode = qrMessage;
+            lastScanTime = now;
+            
+            // Oczekiwany format: https://onedevelopmentpl.github.io/tickets/t?=Imie,Nazwisko
+            if (!qrMessage.startsWith("https://onedevelopmentpl.github.io/tickets/t?=")) {
+                showPopup("❌ Błędny format QR!", true);
+                updateStatus("Błąd: Nieprawidłowy format kodu QR", "error");
+                return;
+            }
+            
             const data = qrMessage.split("?=");
             if (data.length !== 2) {
-                showPopup("Niepoprawne dane QR!");
+                showPopup("❌ Niepoprawne dane QR!", true);
+                updateStatus("Błąd: Brak wymaganych danych w kodzie", "error");
                 return;
             }
-
+            
             const osoba = decodeURIComponent(data[1]);
             if (!osoba.includes(",")) {
-                showPopup("Brak imienia i nazwiska!");
+                showPopup("❌ Brak imienia i nazwiska!", true);
+                updateStatus("Błąd: Niepełne dane osobowe", "error");
                 return;
             }
-
-            const [imie, nazwisko] = osoba.split(",");
-            showPopup(`${imie} ${nazwisko}`);
+            
+            const [imie, nazwisko] = osoba.split(",").map(s => s.trim());
+            
+            scanCount++;
+            countSpan.textContent = scanCount;
+            
+            showPopup(`✅ ${imie} ${nazwisko}`, false);
+            updateStatus(`Ostatnio zeskanowano: ${imie} ${nazwisko}`, "success");
         }
-
+        
         function onScanError(err) {
-            alert("Wystąpił nieoczekiwany błąd!");
+            // Ignorujemy błędy skanowania (normalny stan podczas szukania QR)
         }
-
-        const html5QrCode = new Html5Qrcode("reader");
-        navigator.mediaDevices.getUserMedia({ video: true })
-            .then(() => {
-                Html5Qrcode.getCameras().then(cameras => {
-            if (cameras && cameras.length) {
-                html5QrCode.start(
-                    cameras[0].id,
-                    { fps: 10, qrbox: 250 },
+        
+        async function startScanner() {
+            try {
+                updateStatus("Sprawdzanie dostępu do kamery...", "info");
+                startBtn.disabled = true;
+                
+                // Najpierw sprawdź dostępność kamery
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "environment" } 
+                });
+                
+                // Zatrzymaj tymczasowy strumień
+                stream.getTracks().forEach(track => track.stop());
+                
+                updateStatus("Uruchamianie skanera...", "info");
+                
+                // Pobierz listę kamer
+                const cameras = await Html5Qrcode.getCameras();
+                
+                if (!cameras || cameras.length === 0) {
+                    throw new Error("Nie znaleziono żadnej kamery");
+                }
+                
+                // Inicjalizuj skaner
+                html5QrCode = new Html5Qrcode("reader");
+                
+                // Preferuj tylną kamerę (environment) jeśli dostępna
+                let cameraId = cameras[0].id;
+                for (let camera of cameras) {
+                    if (camera.label.toLowerCase().includes('back') || 
+                        camera.label.toLowerCase().includes('rear') ||
+                        camera.label.toLowerCase().includes('environment')) {
+                        cameraId = camera.id;
+                        break;
+                    }
+                }
+                
+                await html5QrCode.start(
+                    cameraId,
+                    { 
+                        fps: 10, 
+                        qrbox: { width: 250, height: 250 },
+                        aspectRatio: 1.0
+                    },
                     onScanSuccess,
                     onScanError
                 );
+                
+                isScanning = true;
+                startBtn.textContent = "⏸️ Zatrzymaj skaner";
+                startBtn.disabled = false;
+                updateStatus("Skaner aktywny - skieruj kamerę na kod QR", "success");
+                
+            } catch (err) {
+                console.error("Błąd podczas uruchamiania skanera:", err);
+                
+                let errorMsg = "Nie można uruchomić kamery. ";
+                
+                if (err.name === 'NotAllowedError') {
+                    errorMsg += "Brak uprawnień do kamery. Sprawdź ustawienia przeglądarki.";
+                } else if (err.name === 'NotFoundError') {
+                    errorMsg += "Nie znaleziono kamery w urządzeniu.";
+                } else if (err.name === 'NotReadableError') {
+                    errorMsg += "Kamera jest używana przez inną aplikację.";
+                } else {
+                    errorMsg += err.message || "Nieznany błąd.";
+                }
+                
+                updateStatus(errorMsg, "error");
+                showPopup("❌ " + errorMsg, true);
+                startBtn.disabled = false;
+            }
+        }
+        
+        async function stopScanner() {
+            if (html5QrCode && isScanning) {
+                try {
+                    await html5QrCode.stop();
+                    isScanning = false;
+                    startBtn.textContent = "📷 Uruchom skaner";
+                    updateStatus("Skaner zatrzymany", "info");
+                } catch (err) {
+                    console.error("Błąd podczas zatrzymywania skanera:", err);
+                }
+            }
+        }
+        
+        startBtn.addEventListener('click', async () => {
+            if (isScanning) {
+                await stopScanner();
+            } else {
+                await startScanner();
+            }
+        });
+        
+        // Automatyczne czyszczenie przy opuszczeniu strony
+        window.addEventListener('beforeunload', () => {
+            if (isScanning) {
+                stopScanner();
             }
         });
     </script>
